@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="id" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistem Pendataan Keterlambatan</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="/_sdk/data_sdk.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Poppins', sans-serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    
+    @keyframes slideIn { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+    
+    .animate-slide-in { animation: slideIn 0.5s ease-out; }
+    .animate-fade-in { animation: fadeIn 0.6s ease-out; }
+    .animate-pulse-ring { animation: pulse-ring 2s infinite; }
+    
+    .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+    .gradient-header { background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); }
+    .gradient-accent { background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); }
+    
+    .tab-btn { @apply px-4 py-2 rounded-lg font-medium transition-all; }
+    .tab-btn.active { @apply bg-red-600 text-white shadow-lg; }
+    .tab-btn.inactive { @apply text-gray-600 hover:bg-gray-100; }
+    
+    .status-badge { @apply inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium; }
+    .status-terlambat { @apply bg-red-100 text-red-700; }
+    .status-tepat { @apply bg-green-100 text-green-700; }
+    
+    .table-container { @apply overflow-x-auto rounded-xl; }
+    .table-striped tbody tr:nth-child(odd) { @apply bg-gray-50; }
+    
+    .input-field { @apply w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-red-500 focus:ring-2 focus:ring-red-200 transition outline-none; }
+    .btn-primary { @apply px-6 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold rounded-lg hover:from-red-700 hover:to-red-800 transition-all transform hover:scale-105 shadow-lg; }
+    .btn-secondary { @apply px-6 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-all; }
+  </style>
+  <style>body { box-sizing: border-box; }</style>
+ </head>
+ <body class="h-full bg-gradient-to-br from-gray-50 to-gray-100">
+  <div id="app" class="h-full w-full overflow-auto flex flex-col"><!-- Top Bar -->
+   <div class="gradient-header text-white shadow-xl sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+     <div class="flex items-center gap-3">
+      <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-2xl">
+       <img src="smk.png" alt="" srcset="">
+      </div>
+      <div>
+       <h1 id="school-name" class="text-2xl font-bold">SMK Balekambang</h1>
+       <p id="school-motto" class="text-red-100 text-sm">Profesional, Terampil, Mandiri</p>
+      </div>
+     </div>
+     <div class="text-center">
+      <div class="text-4xl font-bold" id="current-time">
+       07:30
+      </div>
+      <div class="text-red-100 text-sm" id="current-date">
+       Jumat, 1 Januari 2024
+      </div>
+     </div>
+    </div>
+   </div><!-- Main Content -->
+   <div class="flex-1 max-w-7xl mx-auto w-full px-4 py-6 space-y-6"><!-- Tab Navigation -->
+    <div class="flex gap-2 bg-white rounded-xl p-2 shadow-md sticky top-16 z-30"><button onclick="switchTab('input')" class="tab-btn active" id="tab-input"> ✏️ Input Data </button> <button onclick="switchTab('data')" class="tab-btn inactive" id="tab-data"> 📊 Tabel Data </button> <button onclick="switchTab('analytics')" class="tab-btn inactive" id="tab-analytics"> 📈 Analitik &amp; Grafik </button>
+    </div><!-- Tab 1: Input Data -->
+    <div id="tab-input-content" class="space-y-6 animate-fade-in"><!-- Quick Entry Card -->
+     <div class="glass rounded-2xl p-6 shadow-lg">
+      <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2"><span class="text-3xl">⚡</span> Input Cepat Keterlambatan</h2>
+      <form id="quick-entry-form" class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+       <div><label class="block text-sm font-semibold text-gray-700 mb-2">Nama Siswa</label> <input type="text" id="input-nama" placeholder="Masukkan nama..." class="input-field" required>
+       </div>
+       <div><label class="block text-sm font-semibold text-gray-700 mb-2">Kelas</label> <select id="input-kelas" class="input-field" required> <option value="">Pilih Kelas</option> <option value="X-TKJ-1">X-TKJ-1</option> <option value="X-TKJ-2">X-TKJ-2</option> <option value="X-RPL-1">X-RPL-1</option> <option value="X-RPL-2">X-RPL-2</option> <option value="XI-TKJ-1">XI-TKJ-1</option> <option value="XI-RPL-1">XI-RPL-1</option> <option value="XII-TKJ-1">XII-TKJ-1</option> <option value="XII-RPL-1">XII-RPL-1</option> </select>
+       </div>
+       <div><label class="block text-sm font-semibold text-gray-700 mb-2">Jam Masuk Siswa</label> <input type="time" id="input-jam" class="input-field" required>
+       </div>
+       <div><label class="block text-sm font-semibold text-gray-700 mb-2">Menit Terlambat</label> <input type="number" id="input-menit" placeholder="0" min="0" class="input-field" required>
+       </div>
+       <div><label class="block text-sm font-semibold text-gray-700 mb-2">Keterangan</label> <input type="text" id="input-ket" placeholder="Ex: Macet, Sakit..." class="input-field">
+       </div>
+       <div><label class="block text-sm font-semibold text-gray-700 mb-2">Tanggal</label> <input type="date" id="input-tanggal" class="input-field" required>
+       </div>
+       <div class="md:col-span-2 lg:col-span-4"><button type="submit" class="btn-primary w-full"> ➕ Tambah Data </button>
+       </div>
+      </form>
+     </div><!-- Statistics Cards -->
+     <div class="grid md:grid-cols-4 gap-4">
+      <div class="glass rounded-xl p-6 shadow-lg border-l-4 border-red-600">
+       <div class="text-gray-600 text-sm font-semibold">
+        Total Keterlambatan Hari Ini
+       </div>
+       <div class="text-4xl font-bold text-red-600 mt-2" id="stat-hari-ini">
+        0
+       </div>
+      </div>
+      <div class="glass rounded-xl p-6 shadow-lg border-l-4 border-orange-500">
+       <div class="text-gray-600 text-sm font-semibold">
+        Minggu Ini
+       </div>
+       <div class="text-4xl font-bold text-orange-500 mt-2" id="stat-minggu">
+        0
+       </div>
+      </div>
+      <div class="glass rounded-xl p-6 shadow-lg border-l-4 border-yellow-500">
+       <div class="text-gray-600 text-sm font-semibold">
+        Bulan Ini
+       </div>
+       <div class="text-4xl font-bold text-yellow-500 mt-2" id="stat-bulan">
+        0
+       </div>
+      </div>
+      <div class="glass rounded-xl p-6 shadow-lg border-l-4 border-blue-600">
+       <div class="text-gray-600 text-sm font-semibold">
+        Total Semua Data
+       </div>
+       <div class="text-4xl font-bold text-blue-600 mt-2" id="stat-total">
+        0
+       </div>
+      </div>
+     </div>
+    </div><!-- Tab 2: Table Data -->
+    <div id="tab-data-content" class="hidden space-y-4 animate-fade-in">
+     <div class="glass rounded-2xl p-6 shadow-lg">
+      <div class="flex items-center justify-between mb-4">
+       <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2"><span class="text-3xl">📊</span> Tabel Data Keterlambatan</h2><input type="text" id="search-input" placeholder="🔍 Cari nama..." class="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-red-500 outline-none">
+      </div>
+      <div class="table-container">
+       <table class="w-full table-striped text-sm">
+        <thead class="gradient-header text-white">
+         <tr>
+          <th class="px-4 py-3 text-left">No</th>
+          <th class="px-4 py-3 text-left">Nama Siswa</th>
+          <th class="px-4 py-3 text-left">Kelas</th>
+          <th class="px-4 py-3 text-left">Tanggal</th>
+          <th class="px-4 py-3 text-left">Jam Masuk</th>
+          <th class="px-4 py-3 text-center">Menit Terlambat</th>
+          <th class="px-4 py-3 text-left">Keterangan</th>
+          <th class="px-4 py-3 text-center">Aksi</th>
+         </tr>
+        </thead>
+        <tbody id="data-table-body"><!-- Data will be rendered here -->
+        </tbody>
+       </table>
+       <div id="no-data-msg" class="text-center py-8 text-gray-500">
+        Belum ada data keterlambatan
+       </div>
+      </div>
+     </div>
+    </div><!-- Tab 3: Analytics & Charts -->
+    <div id="tab-analytics-content" class="hidden space-y-6 animate-fade-in"><!-- Summary Cards -->
+     <div class="grid md:grid-cols-3 gap-4">
+      <div class="glass rounded-xl p-6 shadow-lg">
+       <div class="text-gray-600 text-sm font-semibold">
+        Rata-rata Menit Terlambat
+       </div>
+       <div class="text-3xl font-bold text-red-600 mt-2" id="avg-terlambat">
+        0 menit
+       </div>
+      </div>
+      <div class="glass rounded-xl p-6 shadow-lg">
+       <div class="text-gray-600 text-sm font-semibold">
+        Siswa Paling Sering Terlambat
+       </div>
+       <div class="text-2xl font-bold text-blue-600 mt-2" id="siswa-terbanyak">
+        -
+       </div>
+       <div class="text-gray-500 text-xs mt-1" id="siswa-terbanyak-count">
+        0 kali
+       </div>
+      </div>
+      <div class="glass rounded-xl p-6 shadow-lg">
+       <div class="text-gray-600 text-sm font-semibold">
+        Kelas dengan Keterlambatan Terbanyak
+       </div>
+       <div class="text-2xl font-bold text-orange-600 mt-2" id="kelas-terbanyak">
+        -
+       </div>
+       <div class="text-gray-500 text-xs mt-1" id="kelas-terbanyak-count">
+        0 siswa
+       </div>
+      </div>
+     </div><!-- Charts Grid -->
+     <div class="grid lg:grid-cols-2 gap-6"><!-- Chart 1: Keterlambatan per Hari -->
+      <div class="glass rounded-2xl p-6 shadow-lg">
+       <h3 class="text-xl font-bold text-gray-800 mb-4">📅 Keterlambatan per Hari</h3>
+       <canvas id="chart-harian" height="300"></canvas>
+      </div><!-- Chart 2: Keterlambatan per Kelas -->
+      <div class="glass rounded-2xl p-6 shadow-lg">
+       <h3 class="text-xl font-bold text-gray-800 mb-4">🏫 Keterlambatan per Kelas</h3>
+       <canvas id="chart-kelas" height="300"></canvas>
+      </div><!-- Chart 3: Top Siswa Terlambat -->
+      <div class="glass rounded-2xl p-6 shadow-lg">
+       <h3 class="text-xl font-bold text-gray-800 mb-4">👥 Top 10 Siswa Terlambat</h3>
+       <canvas id="chart-siswa" height="300"></canvas>
+      </div><!-- Chart 4: Distribusi Menit Terlambat -->
+      <div class="glass rounded-2xl p-6 shadow-lg">
+       <h3 class="text-xl font-bold text-gray-800 mb-4">⏱️ Distribusi Durasi Terlambat</h3>
+       <canvas id="chart-durasi" height="300"></canvas>
+      </div>
+     </div>
+    </div>
+   </div>
+  </div><!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-4 right-4 px-6 py-3 rounded-xl shadow-2xl transform translate-y-full opacity-0 transition-all duration-300 z-50 text-white font-semibold"></div>
+  <script>
+    const defaultConfig = {
+      school_name: 'SMK Balekambang',
+      school_motto: 'Profesional, Terampil, Mandiri',
+      jam_masuk_standar: '07:00',
+      batas_terlambat: '15'
+    };
+
+    let config = { ...defaultConfig };
+    let allData = [];
+    let chartInstances = {};
+    let currentTab = 'input';
+    let isSubmitting = false;
+
+    // Update current time and date
+    function updateTime() {
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      document.getElementById('current-time').textContent = `${hours}:${minutes}`;
+      
+      const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+      const dateStr = `${days[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
+      document.getElementById('current-date').textContent = dateStr;
+      
+      // Set today's date as default
+      const today = now.toISOString().split('T')[0];
+      const dateInput = document.getElementById('input-tanggal');
+      if (dateInput) dateInput.value = today;
+    }
+
+    // Data Handler
+    const dataHandler = {
+      onDataChanged(data) {
+        allData = data;
+        renderTable();
+        updateStatistics();
+        if (currentTab === 'analytics') {
+          updateAnalytics();
+        }
+      }
+    };
+
+    // Render table
+    function renderTable(searchTerm = '') {
+      const container = document.getElementById('data-table-body');
+      const noMsg = document.getElementById('no-data-msg');
+      
+      let filtered = allData;
+      if (searchTerm) {
+        filtered = allData.filter(d => 
+          d.nama_siswa?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      }
+      
+      if (filtered.length === 0) {
+        container.innerHTML = '';
+        noMsg.classList.remove('hidden');
+        return;
+      }
+      
+      noMsg.classList.add('hidden');
+      
+      const existingIds = new Map([...container.children].map(el => [el.dataset.id, el]));
+      let no = 1;
+      
+      filtered.forEach(item => {
+        const statusClass = item.menit_terlambat > 0 ? 'status-terlambat' : 'status-tepat';
+        const statusText = item.menit_terlambat > 0 ? '🔴 Terlambat' : '✅ Tepat Waktu';
+        
+        if (existingIds.has(item.__backendId)) {
+          existingIds.delete(item.__backendId);
+        } else {
+          const row = document.createElement('tr');
+          row.dataset.id = item.__backendId;
+          row.innerHTML = `
+            <td class="px-4 py-3">${no}</td>
+            <td class="px-4 py-3 font-semibold text-gray-800">${item.nama_siswa}</td>
+            <td class="px-4 py-3"><span class="px-2 py-1 bg-blue-100 text-blue-700 rounded font-semibold text-xs">${item.kelas}</span></td>
+            <td class="px-4 py-3 text-sm">${new Date(item.tanggal).toLocaleDateString('id-ID')}</td>
+            <td class="px-4 py-3 font-mono">${item.jam_masuk}</td>
+            <td class="px-4 py-3 text-center font-bold text-red-600">${item.menit_terlambat} menit</td>
+            <td class="px-4 py-3 text-sm">${item.keterangan || '-'}</td>
+            <td class="px-4 py-3 text-center">
+              <button onclick="deleteData('${item.__backendId}')" class="px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 transition text-sm">
+                🗑️ Hapus
+              </button>
+            </td>
+          `;
+          container.appendChild(row);
+        }
+        no++;
+      });
+      
+      existingIds.forEach(el => el.remove());
+    }
+
+    // Update statistics
+    function updateStatistics() {
+      const today = new Date().toISOString().split('T')[0];
+      const thisWeekStart = new Date();
+      thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay());
+      const thisMonthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      
+      const todayData = allData.filter(d => d.tanggal === today).length;
+      const weekData = allData.filter(d => new Date(d.tanggal) >= thisWeekStart).length;
+      const monthData = allData.filter(d => new Date(d.tanggal) >= thisMonthStart).length;
+      const totalData = allData.length;
+      
+      document.getElementById('stat-hari-ini').textContent = todayData;
+      document.getElementById('stat-minggu').textContent = weekData;
+      document.getElementById('stat-bulan').textContent = monthData;
+      document.getElementById('stat-total').textContent = totalData;
+    }
+
+    // Update analytics
+    function updateAnalytics() {
+      if (allData.length === 0) {
+        document.getElementById('avg-terlambat').textContent = '0 menit';
+        document.getElementById('siswa-terbanyak').textContent = '-';
+        document.getElementById('kelas-terbanyak').textContent = '-';
+        return;
+      }
+      
+      // Average
+      const avgMenit = Math.round(allData.reduce((a, b) => a + (b.menit_terlambat || 0), 0) / allData.length);
+      document.getElementById('avg-terlambat').textContent = `${avgMenit} menit`;
+      
+      // Most frequent student
+      const siswaCount = {};
+      allData.forEach(d => {
+        siswaCount[d.nama_siswa] = (siswaCount[d.nama_siswa] || 0) + 1;
+      });
+      const siswaTerbanyak = Object.entries(siswaCount).sort((a, b) => b[1] - a[1])[0];
+      if (siswaTerbanyak) {
+        document.getElementById('siswa-terbanyak').textContent = siswaTerbanyak[0];
+        document.getElementById('siswa-terbanyak-count').textContent = `${siswaTerbanyak[1]} kali`;
+      }
+      
+      // Class with most tardiness
+      const kelasCount = {};
+      allData.forEach(d => {
+        kelasCount[d.kelas] = (kelasCount[d.kelas] || 0) + 1;
+      });
+      const kelasTerbanyak = Object.entries(kelasCount).sort((a, b) => b[1] - a[1])[0];
+      if (kelasTerbanyak) {
+        document.getElementById('kelas-terbanyak').textContent = kelasTerbanyak[0];
+        document.getElementById('kelas-terbanyak-count').textContent = `${kelasTerbanyak[1]} siswa`;
+      }
+      
+      // Draw charts
+      updateCharts();
+    }
+
+    // Update charts
+    function updateCharts() {
+      // Chart 1: Daily tardiness
+      const dailyData = {};
+      allData.forEach(d => {
+        const date = new Date(d.tanggal).toLocaleDateString('id-ID', { month: 'short', day: 'numeric' });
+        dailyData[date] = (dailyData[date] || 0) + 1;
+      });
+      
+      updateChart('chart-harian', {
+        type: 'line',
+        data: {
+          labels: Object.keys(dailyData).slice(-10),
+          datasets: [{
+            label: 'Keterlambatan',
+            data: Object.values(dailyData).slice(-10),
+            borderColor: '#dc2626',
+            backgroundColor: 'rgba(220, 38, 38, 0.1)',
+            tension: 0.4,
+            fill: true,
+            pointRadius: 6,
+            pointBackgroundColor: '#dc2626'
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+      });
+      
+      // Chart 2: By class
+      const kelasCounts = {};
+      allData.forEach(d => kelasCounts[d.kelas] = (kelasCounts[d.kelas] || 0) + 1);
+      
+      updateChart('chart-kelas', {
+        type: 'bar',
+        data: {
+          labels: Object.keys(kelasCounts),
+          datasets: [{
+            label: 'Jumlah Keterlambatan',
+            data: Object.values(kelasCounts),
+            backgroundColor: ['#dc2626', '#f97316', '#eab308', '#22c55e', '#0ea5e9', '#8b5cf6', '#ec4899', '#06b6d4']
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+      });
+      
+      // Chart 3: Top students
+      const siswaCounts = {};
+      allData.forEach(d => siswaCounts[d.nama_siswa] = (siswaCounts[d.nama_siswa] || 0) + 1);
+      const topSiswa = Object.entries(siswaCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+      
+      updateChart('chart-siswa', {
+        type: 'bar',
+        data: {
+          labels: topSiswa.map(s => s[0].split(' ')[0]),
+          datasets: [{
+            label: 'Kali Terlambat',
+            data: topSiswa.map(s => s[1]),
+            backgroundColor: '#ef4444'
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+      });
+      
+      // Chart 4: Duration distribution
+      const durations = { '1-5': 0, '6-15': 0, '16-30': 0, '30+': 0 };
+      allData.forEach(d => {
+        if (d.menit_terlambat <= 5) durations['1-5']++;
+        else if (d.menit_terlambat <= 15) durations['6-15']++;
+        else if (d.menit_terlambat <= 30) durations['16-30']++;
+        else durations['30+']++;
+      });
+      
+      updateChart('chart-durasi', {
+        type: 'doughnut',
+        data: {
+          labels: Object.keys(durations),
+          datasets: [{
+            data: Object.values(durations),
+            backgroundColor: ['#fbbf24', '#f97316', '#ef4444', '#991b1b']
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+    }
+
+    // Helper to update chart
+    function updateChart(canvasId, config) {
+      const ctx = document.getElementById(canvasId).getContext('2d');
+      if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+      chartInstances[canvasId] = new Chart(ctx, config);
+    }
+
+    // Switch tab
+    function switchTab(tab) {
+      currentTab = tab;
+      
+      ['input', 'data', 'analytics'].forEach(t => {
+        document.getElementById(`tab-${t}-content`).classList.toggle('hidden', tab !== t);
+        document.getElementById(`tab-${t}`).classList.toggle('active', tab === t);
+        document.getElementById(`tab-${t}`).classList.toggle('inactive', tab !== t);
+      });
+      
+      if (tab === 'analytics') {
+        updateAnalytics();
+      }
+    }
+
+    // Delete data
+    async function deleteData(id) {
+      const item = allData.find(d => d.__backendId === id);
+      if (!item) return;
+      const result = await window.dataSdk.delete(item);
+      if (result.isOk) {
+        showToast('✅ Data berhasil dihapus', 'success');
+      } else {
+        showToast('❌ Gagal menghapus data', 'error');
+      }
+    }
+
+    // Show toast
+    function showToast(msg, type = 'success') {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-xl shadow-2xl transform transition-all duration-300 z-50 text-white font-semibold ${
+        type === 'success' ? 'bg-gradient-to-r from-green-600 to-green-700' : 'bg-gradient-to-r from-red-600 to-red-700'
+      }`;
+      
+      setTimeout(() => toast.classList.remove('translate-y-full', 'opacity-0'), 10);
+      setTimeout(() => toast.classList.add('translate-y-full', 'opacity-0'), 3000);
+    }
+
+    // Apply config
+    function applyConfig() {
+      document.getElementById('school-name').textContent = config.school_name || defaultConfig.school_name;
+      document.getElementById('school-motto').textContent = config.school_motto || defaultConfig.school_motto;
+    }
+
+    // Element SDK init
+    if (window.elementSdk) {
+      window.elementSdk.init({
+        defaultConfig,
+        onConfigChange: async (newConfig) => {
+          config = { ...defaultConfig, ...newConfig };
+          applyConfig();
+        },
+        mapToCapabilities: (cfg) => ({ recolorables: [], borderables: [], fontEditable: undefined, fontSizeable: undefined }),
+        mapToEditPanelValues: (cfg) => new Map([
+          ['school_name', cfg.school_name || defaultConfig.school_name],
+          ['school_motto', cfg.school_motto || defaultConfig.school_motto],
+          ['jam_masuk_standar', cfg.jam_masuk_standar || defaultConfig.jam_masuk_standar],
+          ['batas_terlambat', cfg.batas_terlambat || defaultConfig.batas_terlambat]
+        ])
+      });
+    }
+
+    // Data SDK init
+    async function initDataSdk() {
+      if (window.dataSdk) {
+        const result = await window.dataSdk.init(dataHandler);
+        if (!result.isOk) console.error('Failed to init Data SDK');
+      }
+    }
+
+    // Form submission
+    document.getElementById('quick-entry-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      if (isSubmitting) return;
+      
+      if (allData.length >= 999) {
+        showToast('❌ Batas maksimal 999 data tercapai', 'error');
+        return;
+      }
+      
+      isSubmitting = true;
+      const btn = e.target.querySelector('button');
+      btn.disabled = true;
+      btn.innerHTML = '⏳ Menyimpan...';
+      
+      const data = {
+        id: Date.now().toString(),
+        nama_siswa: document.getElementById('input-nama').value,
+        kelas: document.getElementById('input-kelas').value,
+        jam_masuk: document.getElementById('input-jam').value,
+        tanggal: document.getElementById('input-tanggal').value,
+        menit_terlambat: parseInt(document.getElementById('input-menit').value) || 0,
+        keterangan: document.getElementById('input-ket').value,
+        status: 'recorded'
+      };
+      
+      const result = await window.dataSdk.create(data);
+      if (result.isOk) {
+        showToast('✅ Data keterlambatan berhasil dicatat!', 'success');
+        e.target.reset();
+        updateTime();
+      } else {
+        showToast('❌ Gagal menyimpan data', 'error');
+      }
+      
+      isSubmitting = false;
+      btn.disabled = false;
+      btn.innerHTML = '➕ Tambah Data';
+    });
+
+    // Search
+    document.getElementById('search-input').addEventListener('input', (e) => {
+      renderTable(e.target.value);
+    });
+
+    // Initialize
+    updateTime();
+    setInterval(updateTime, 1000);
+    initDataSdk();
+    applyConfig();
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9cda23db22adfd35',t:'MTc3MTA0NjY3Ni4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
